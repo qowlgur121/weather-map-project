@@ -1,0 +1,61 @@
+# .gitignore (프로젝트 루트 통합 버전)
+
+# IDE 설정 파일 및 디렉토리
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+# VSCode 설정은 예외 처리 
+# !.vscode/settings.json
+# !.vscode/tasks.json
+# !.vscode/launch.json
+# !.vscode/extensions.json
+
+# Java/Gradle 빌드 결과물 및 임시 파일
+/backend/build/
+/backend/out/
+/backend/.gradle/
+*.jar
+*.war
+*~
+*.swp
+
+# Node.js/Vue 의존성 및 빌드 결과물
+/frontend/node_modules/
+/frontend/dist/
+/frontend/.pnp.*
+/frontend/.output/
+
+# 로그 파일
+*.log
+/frontend/npm-debug.log*
+/frontend/yarn-debug.log*
+/frontend/yarn-error.log*
+/frontend/pnpm-debug.log*
+
+# 운영체제(macOS, Windows) 생성 파일
+.DS_Store
+Thumbs.db
+ehthumbs.db
+
+# 로컬 환경 설정 파일 (민감 정보 포함 가능)
+.env
+.env.*.local
+# 단, 예시 파일은 버전 관리에 포함
+!.env.example
+
+# IntelliJ 특정 임시/로컬 설정 파일 
+/shelf/
+/workspace.xml
+/httpRequests/
+/dataSources/
+/dataSources.local.xml
+
+# 기타 불필요 파일
+.classpath
+.project
+.settings/
+*.bak
+*.tmp
+HELP.md # Gradle Wrapper 도움말 파일 

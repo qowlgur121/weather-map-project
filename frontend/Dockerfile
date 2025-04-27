@@ -1,5 +1,5 @@
 # Dockerfile (frontend 폴더 루트에 위치)
- 
+
  # ========== 1단계: 빌드 환경 (Builder Stage) ==========
  # Node.js 환경을 준비한다. 'alpine' 버전은 가볍다. 이 단계를 'builder'라고 이름 붙인다.
  FROM node:18-alpine AS builder

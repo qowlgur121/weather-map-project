@@ -81,6 +81,7 @@
 //    'import'는 다른 파일에 있는 기능을 가져와서 쓰겠다는 뜻이다.
 //    '{ defineStore }'는 pinia 라이브러리 안에 있는 여러 기능 중 defineStore만 쏙 뽑아오겠다는 의미다.
 import { defineStore } from 'pinia';
+import axios from 'axios'; // Axios 임포트
 
 // 2. 스토어를 정의하고 외부에서 사용할 수 있도록 내보낸다(export).
 //    'useWeatherStore'는 다른 컴포넌트에서 이 스토어를 사용하기 위해 호출할 함수의 이름이다. (관례적으로 'use'로 시작하고 스토어 이름 + 'Store'를 붙인다)
@@ -137,31 +138,79 @@ export const useWeatherStore = defineStore('weather', {
   }, // getters 정의 끝 (쉼표 주의!)
 
   // actions는 객체 형태로 정의한다.
+  // actions: 직원이 할 수 있는 행동들
   actions: {
-    // 함수 이름은 보통 동사로 시작한다.
-    // 이 함수는 날씨 타입을 state에 저장하는 역할을 한다.
+    // 사용자가 날씨 종류를 선택하면 그걸 기억하는 행동
     setSelectedWeatherType(weatherType) {
-      // action 함수 안에서는 'this' 키워드를 통해 state 값에 접근하고 변경할 수 있다!
+      console.log('WeatherStore: setSelectedWeatherType', weatherType);
       this.selectedWeatherType = weatherType;
-      console.log(`WeatherStore: 날씨 타입 변경 -> ${weatherType}`);
-      // 타입이 바뀌었으니 기존 데이터는 비워주자.
-      this.weatherData = {};
-      this.error = null;
+      // 참고: 날씨 타입 변경 시 데이터 자동 재로드는 App.vue에서 visibleRegions 변경 감지를 통해 처리될 수 있음
     },
 
-    // 이 함수는 백엔드 API를 호출해서 날씨 데이터를 가져오는 비동기 작업을 할 거다.
-    // 'async' 키워드는 이 함수가 비동기 작업을 포함한다는 표시.
-    async fetchWeatherData(regions) {
-      // 지금은 비워두자. 다음 단계에서 채울 거다!
-      console.log('WeatherStore: fetchWeatherData 호출됨 (구현 예정)');
-      this.isLoading = true; // 일단 로딩 시작 표시
+    // ★★★ 서버에서 날씨 정보 가져오는 행동 ★★★
+    async fetchWeatherData(regions) { // 'async'는 서버 응답을 기다려야 한다는 표시
+                                      // 'regions'는 [{ code, lat, lon }, ...] 형태의 지역 목록
 
-      // --- 여기에 나중에 axios API 호출 코드가 들어간다 ---
-      // 예시: const response = await axios.post(...)
-      //       this.weatherData = ...
-      // --- ---
+      // 1. 준비물 확인: 날씨 종류가 선택되었고, 지역 목록이 비어있지 않은지 확인
+      if (!this.selectedWeatherType || !regions || regions.length === 0) {
+        console.warn('WeatherStore: 아직 준비 안됨! (날씨 종류나 지역 목록 없음)');
+        this.weatherData = {}; // 혹시 모르니 이전 날씨 정보는 지움
+        return; // 여기서 작업 중단
+      }
 
-      this.isLoading = false; // 임시로 바로 로딩 종료
-    },
-  }, // actions 정의 끝
+      // 2. 작업 시작 알림 및 준비
+      console.log(`WeatherStore: 서버에 날씨 정보 물어보러 출발! (${regions.length}개 지역, 종류: ${this.selectedWeatherType})`);
+      this.isLoading = true; // "지금 작업 중" 상태로 변경 (로딩 스피너 보여줄 수 있음)
+      this.error = null;     // 이전에 에러가 있었으면 일단 지움
+
+      // 3. 서버와 대화 시도 (try: 시도해보다)
+      try {
+        // ★★★ 진짜 서버에게 물어보는 부분 ★★★
+        const response = await axios.post( // 'await'는 서버 응답 올 때까지 잠시 기다리라는 뜻
+          // 요청 주소: 상대 경로 사용 (API_BASE_URL 제거)
+          '/api/weather/regions',
+          // 요청 내용(본문): 서버에게 줄 정보 (어떤 지역들인지 알려줌)
+          regions,
+          // 추가 정보 (쿼리 파라미터): 어떤 종류의 날씨인지 주소 뒤에 붙여서 알려줌 (?type=TMP)
+          { params: { type: this.selectedWeatherType } }
+        );
+        // ★★★ 서버 응답 도착! ★★★
+
+        // 4. 서버 응답 확인 및 정리
+        console.log('WeatherStore: 서버가 대답함!', response.data);
+        const newWeatherData = {}; // 서버 응답을 정리해서 담을 새 그릇 준비
+
+        // 서버가 준 데이터(response.data)가 우리가 예상한 목록(배열) 형태인지 확인
+        if (response.data && Array.isArray(response.data)) {
+          // 목록에 있는 각 날씨 정보(item)를 꺼내서 정리
+          response.data.forEach(item => {
+            // 지역 코드(예: '11000')를 이름표로 해서 값과 단위를 저장
+            newWeatherData[item.regionCode] = {
+              value: item.value, // 실제 날씨 값 (예: 25)
+              unit: item.unit,   // 단위 (예: 'C')
+            };
+          });
+          // ★ 정리된 최신 날씨 정보를 직원의 메모장(state)에 업데이트! ★
+          this.weatherData = newWeatherData;
+          console.log(`WeatherStore: 날씨 정보 저장 완료! (${Object.keys(this.weatherData).length}개 지역)`);
+        } else {
+          // 서버가 이상한 형태로 응답하면 에러 처리
+          console.warn("WeatherStore: 서버 응답 형식이 이상함.", response.data);
+          this.error = '서버 응답 형식 오류';
+        }
+
+      // 5. 서버와 대화 중 문제 발생 시 (catch: 잡다)
+      } catch (err) {
+        console.error('WeatherStore: 서버와 통신 중 에러 발생!', err);
+        // 에러 메시지를 직원의 메모장(state)에 기록
+        this.error = err.response?.data?.message || err.message || '날씨 정보 로딩 실패';
+        // 에러 났으니 날씨 정보는 비워둠
+        this.weatherData = {};
+      } finally {
+        // 6. 작업 완료 (finally: 마지막에 항상 실행)
+        this.isLoading = false; // "작업 끝" 상태로 변경 (로딩 스피너 숨김)
+        console.log('WeatherStore: 날씨 정보 요청 처리 종료.');
+      }
+    }, // fetchWeatherData 액션 끝
+  }, // actions 끝
 })

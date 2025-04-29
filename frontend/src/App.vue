@@ -7,17 +7,14 @@
       <!-- ★★★ MapView에 이벤트 리스너 연결 ★★★ -->
       <MapView
         ref="mapViewRef"
-        @region-hover="updateSidebar" 
+        @region-hover="updateSidebar"
         @region-mouseout="clearSidebar"
-        @region-click="handleRegionClick" 
+        @region-click="handleRegionClick"
       />
     </main>
 
-    <aside class="sidebar-area">
-      <h4>날씨 요약 정보</h4>
-      <p>지역명: {{ hoveredRegionName }}</p>
-      <p>지역코드: {{ hoveredRegionCode }}</p>
-    </aside>
+    <!-- ★★★ Sidebar 컴포넌트 사용 ★★★ -->
+    <AppSidebar />
 
     <div class="map-controls">
       <button @click="zoomIn">+</button>
@@ -27,16 +24,18 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { ref, watch } from 'vue'; // watch 추가
 import AppHeader from './components/AppHeader.vue';
 import MapView from './components/MapView.vue';
+import AppSidebar from './components/AppSidebar.vue'; // Sidebar 컴포넌트 이름 변경
+import { useMapStore } from './stores/mapStore'; // mapStore import 추가
 
 const mapViewRef = ref(null);
 const hoveredRegionName = ref(''); // Sidebar 표시용 임시 상태
 const hoveredRegionCode = ref(''); // Sidebar 표시용 임시 상태
+const mapStore = useMapStore(); // mapStore 인스턴스 생성
 
-
-// Header에서 'navigate-home' 이벤트 수신 시 실행될 함수
+// Home 버튼 클릭 처리 수정
 const moveToCurrentUserLocation = () => {
   console.log('App.vue: navigate-home 이벤트 수신');
   if (navigator.geolocation) {
@@ -46,23 +45,13 @@ const moveToCurrentUserLocation = () => {
         const longitude = position.coords.longitude;
         console.log(`현재 위치: 위도 ${latitude}, 경도 ${longitude}`);
 
-        if (mapViewRef.value && mapViewRef.value.map) {
-          const currentMap = mapViewRef.value.map.value; // MapView에서 노출한 ref 변수 접근 시 .value 추가
-          if (currentMap) { // map.value가 실제 지도 객체인지 한번 더 확인
-             const newCenter = new window.naver.maps.LatLng(latitude, longitude);
-             currentMap.setCenter(newCenter);
-             currentMap.setZoom(14); // 적절한 줌 레벨
-             // 기존 마커 제거 로직 필요 시 추가
-             new window.naver.maps.Marker({
-                position: newCenter,
-                map: currentMap,
-                title: '현재 위치'
-             });
-          } else {
-             console.error('App.vue: MapView의 map 객체가 유효하지 않습니다.');
-          }
+        // ★★★ MapView의 노출된 메소드 호출 ★★★
+        if (mapViewRef.value) {
+          mapViewRef.value.moveToLocation(latitude, longitude, 14); // 줌 레벨 14로 이동
+          // TODO: 마커 추가 로직도 MapView 내부 메소드로 만들거나 여기서 직접 처리
+           // (여기서 하려면 여전히 map 객체 접근 필요... moveToLocation에 마커 추가 로직 포함시키는게 나을수도)
         } else {
-           console.error('App.vue: MapView 참조 또는 map 객체를 찾을 수 없습니다.');
+           console.error('App.vue: MapView 참조를 찾을 수 없습니다.');
         }
       },
       (error) => {
@@ -77,19 +66,23 @@ const moveToCurrentUserLocation = () => {
   }
 };
 
-// 확대 버튼 클릭 시
+// 확대 버튼 클릭 처리 수정
 const zoomIn = () => {
-  if (mapViewRef.value && mapViewRef.value.map && mapViewRef.value.map.value) {
-    const currentMap = mapViewRef.value.map.value;
-    currentMap.setZoom(currentMap.getZoom() + 1);
+  console.log("App.vue: zoomIn 버튼 클릭");
+  if (mapViewRef.value) {
+    mapViewRef.value.zoomInMap(); // ★ MapView의 메소드 호출
+  } else {
+    console.error("App.vue: MapView 참조 없음 (zoomIn)");
   }
 };
 
-// 축소 버튼 클릭 시
+// 축소 버튼 클릭 처리 수정
 const zoomOut = () => {
-   if (mapViewRef.value && mapViewRef.value.map && mapViewRef.value.map.value) {
-    const currentMap = mapViewRef.value.map.value;
-    currentMap.setZoom(currentMap.getZoom() - 1);
+  console.log("App.vue: zoomOut 버튼 클릭");
+  if (mapViewRef.value) {
+    mapViewRef.value.zoomOutMap(); // ★ MapView의 메소드 호출
+  } else {
+     console.error("App.vue: MapView 참조 없음 (zoomOut)");
   }
 };
 
@@ -107,10 +100,36 @@ const clearSidebar = () => {
    hoveredRegionCode.value = '';
 };
 
+import { useWeatherStore } from './stores/weatherStore';
+
+const weatherStore = useWeatherStore();
+
 const handleRegionClick = (regionInfo) => {
   console.log("App.vue: region-click event received", regionInfo);
   // 필요한 로직 추가
 };
+
+watch(() => mapStore.visibleRegions, (newVisibleRegionsData) => {
+  console.log("App.vue: visibleRegions 변경 감지됨", newVisibleRegionsData);
+
+  // newVisibleRegionsData가 유효한 배열인지 확인
+  if (Array.isArray(newVisibleRegionsData) && newVisibleRegionsData.length > 0) {
+    // 지역 코드와 좌표 정보를 담을 배열
+    const regionsWithCoords = newVisibleRegionsData.map(region => ({
+      code: region.code,
+      lat: region.lat,
+      lon: region.lon
+    }));
+
+    console.log("App.vue: fetchWeatherData 호출 전 regionsWithCoords", regionsWithCoords);
+    weatherStore.fetchWeatherData({
+      type: weatherStore.selectedWeatherType,
+      regions: regionsWithCoords
+    });
+  } else {
+    console.warn("App.vue: 유효하지 않은 visibleRegions 데이터:", newVisibleRegionsData);
+  }
+}, { deep: true });
 
 </script>
 
@@ -142,27 +161,7 @@ html, body {
 }
 
 /* Sidebar 스타일 */
-.sidebar-area {
-  position: absolute;
-  right: 10px;
-  top: 70px; /* Header 높이 + 여백 고려 */
-  width: 220px; /* 너비 조정 */
-  padding: 15px;
-  background-color: rgba(255, 255, 255, 0.7); /* 반투명 배경 */
-  backdrop-filter: blur(10px); /* Glassmorphism 효과 */
-  -webkit-backdrop-filter: blur(10px); /* Safari 지원 */
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  border-radius: 10px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-  z-index: 1000; /* 다른 요소 위에 오도록 */
-  color: #333;
-  font-size: 14px;
-}
-.sidebar-area h4 {
-  margin-top: 0;
-  margin-bottom: 10px;
-  color: #111;
-}
+/* AppSidebar.vue에서 스타일 관리 */
 
 /* 지도 컨트롤 스타일 */
 .map-controls {

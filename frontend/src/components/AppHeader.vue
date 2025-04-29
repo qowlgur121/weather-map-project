@@ -9,12 +9,14 @@
 </template>
 
 <script setup>
-//import { useWeatherStore } from '@/stores/weatherStore'; // ★ 스토어 임포트
-// defineEmits는 컴파일러 매크로이므로 import 불필요
-import { defineEmits } from 'vue'; // 혹시 모르니 일단 추가 (보통 불필요)
+import { useWeatherStore } from '@/stores/weatherStore'; // ★ 스토어 임포트 (주석 해제)
+import { defineEmits } from 'vue'; // defineEmits import 추가
 
-// 부모로 보낼 이벤트 정의
-const emit = defineEmits(['navigate-home', 'select-weather']);
+// 부모로 보낼 이벤트 정의 (select-weather는 이제 사용 안 함)
+const emit = defineEmits(['navigate-home']); // 'select-weather' 제거
+
+// 스토어 인스턴스 가져오기
+const weatherStore = useWeatherStore(); // ★ 스토어 인스턴스 생성
 
 // Home 버튼 클릭 처리
 const goHome = () => {
@@ -22,11 +24,12 @@ const goHome = () => {
   emit('navigate-home');
 };
 
-// 날씨 타입 선택 버튼 클릭 처리
+// 날씨 유형 선택 처리 (emit 대신 스토어 액션 호출)
 const selectWeatherType = (weatherType) => {
-  console.log(`AppHeader: 날씨 타입 선택됨 - ${weatherType}`);
-  emit('select-weather', weatherType); // 선택된 날씨 타입을 부모에게 전달
+  console.log(`AppHeader: 날씨 유형 선택됨 - ${weatherType}`);
+  weatherStore.setSelectedWeatherType(weatherType); // ★ 스토어 액션 호출
 };
+
 </script>
 
 <style scoped>
